@@ -1,0 +1,125 @@
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    volumes:
+      - postgres_db_volume:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:latest
+    restart: always
+
+  airflow-init:
+    build: .
+    image: litwen/custom-airflow:latest
+    command: >
+      bash -c "airflow db upgrade &&
+               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./ssh:/opt/airflow/ssh
+    depends_on:
+      - postgres
+      - redis
+
+  airflow-webserver:
+    build: .
+    image: litwen/custom-airflow:latest
+    command: webserver
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
+      - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      # Параметры для подключения к Hive (используйте их в DAG'ах, если нужно)
+      - HIVE_HOST=89.169.132.254
+      - HIVE_PORT=22
+      - HIVE_USER=ubuntu
+      - HIVE_SSH_KEY_PATH=/opt/airflow/ssh/id_ed25519
+      # Параметры для подключения к ClickHouse
+      - CLICKHOUSE_HOST=rc1a-13d5vimannvvffe2.mdb.yandexcloud.net
+      - CLICKHOUSE_PORT=8443
+      - CLICKHOUSE_USE_SSL=true
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./ssh:/opt/airflow/ssh
+    depends_on:
+      - airflow-init
+      - postgres
+      - redis
+    restart: always
+
+  airflow-scheduler:
+    build: .
+    image: litwen/custom-airflow:latest
+    command: scheduler
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./ssh:/opt/airflow/ssh
+    depends_on:
+      - airflow-init
+      - postgres
+      - redis
+    restart: always
+
+  airflow-worker:
+    build: .
+    image: litwen/custom-airflow:latest
+    command: celery worker
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./ssh:/opt/airflow/ssh
+    depends_on:
+      - airflow-init
+      - postgres
+      - redis
+    restart: always
+
+  airflow-flower:
+    build: .
+    image: litwen/custom-airflow:latest
+    command: celery flower
+    ports:
+      - "5555:5555"
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=YOUR_FERNET_KEY
+    volumes:
+      - ./dags:/opt/airflow/dags
+    depends_on:
+      - airflow-init
+      - postgres
+      - redis
+    restart: always
+
+volumes:
+  postgres_db_volume:
