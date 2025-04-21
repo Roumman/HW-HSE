@@ -1,0 +1,5 @@
+pyhive==0.7.0
+clickhouse-driver==0.2.9
+paramiko==3.5.1
+thrift==0.21.0
+thrift_sasl==0.4.3
